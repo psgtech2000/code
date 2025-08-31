@@ -1,0 +1,91 @@
+import socket
+import json
+import math
+
+# --- Utility: Modular Inverse ---
+def find_mod_inverse(a, m):
+    if math.gcd(a, m) != 1:
+        return None
+    for x in range(1, m):
+        if (a * x) % m == 1:
+            return x
+    return None
+
+# --- Decryption Ciphers ---
+def additive_decrypt(text, key):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            result += chr((ord(char) - base - key) % 26 + base)
+        else:
+            result += char
+    return result
+
+def multiplicative_decrypt(text, key):
+    mod_inv = find_mod_inverse(key, 26)
+    if mod_inv is None:
+        return f"Error: key {key} is not coprime with 26"
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            val = ord(char) - base
+            result += chr((val * mod_inv) % 26 + base)
+        else:
+            result += char
+    return result
+
+def affine_decrypt(text, a, b):
+    mod_inv_a = find_mod_inverse(a, 26)
+    if mod_inv_a is None:
+        return f"Error: a={a} is not coprime with 26"
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            val = ord(char) - base
+            result += chr((mod_inv_a * (val - b)) % 26 + base)
+        else:
+            result += char
+    return result
+
+# --- Handle Requests ---
+def handle_request(request):
+    cipher = request["cipher"]
+    enc_text = request["encrypted"]
+
+    if cipher == "additive":
+        key = request["key"]
+        dec = additive_decrypt(enc_text, key)
+    elif cipher == "multiplicative":
+        key = request["key"]
+        dec = multiplicative_decrypt(enc_text, key)
+    elif cipher == "affine":
+        a, b = request["a"], request["b"]
+        dec = affine_decrypt(enc_text, a, b)
+    else:
+        return {"status": "error", "message": "Invalid cipher"}
+
+    return {"status": "success", "decrypted": dec}
+
+# --- Server Main ---
+def main():
+    host, port = "127.0.0.1", 65432
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, port))
+        s.listen()
+        print(f"Server running on {host}:{port}")
+        while True:
+            conn, addr = s.accept()
+            with conn:
+                data = conn.recv(4096).decode("utf-8")
+                if not data:
+                    continue
+                request = json.loads(data)
+                response = handle_request(request)
+                conn.sendall(json.dumps(response).encode("utf-8"))
+
+if __name__ == "__main__":
+    main()

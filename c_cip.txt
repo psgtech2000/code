@@ -1,0 +1,104 @@
+import socket
+import json
+import math
+
+# --- Utility ---
+def find_mod_inverse(a, m):
+    if math.gcd(a, m) != 1:
+        return None
+    for x in range(1, m):
+        if (a * x) % m == 1:
+            return x
+    return None
+
+# --- Encryption Ciphers ---
+def additive_encrypt(text, key):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            result += chr((ord(char) - base + key) % 26 + base)
+        else:
+            result += char
+    return result
+
+def multiplicative_encrypt(text, key):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            val = ord(char) - base
+            result += chr((val * key) % 26 + base)
+        else:
+            result += char
+    return result
+
+def affine_encrypt(text, a, b):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            val = ord(char) - base
+            result += chr(((a * val + b) % 26) + base)
+        else:
+            result += char
+    return result
+
+# --- Communication ---
+def send_request(request):
+    host, port = "127.0.0.1", 65432
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((host, port))
+        s.sendall(json.dumps(request).encode("utf-8"))
+        response = s.recv(4096).decode("utf-8")
+    return json.loads(response)
+
+def main():
+    while True:
+        print("\n--- Cipher Client ---")
+        print("1. Additive")
+        print("2. Multiplicative")
+        print("3. Affine")
+        print("4. Exit")
+
+        choice = input("Enter choice: ")
+
+        if choice == "1":
+            text = input("Enter text: ")
+            key = int(input("Enter key: "))
+            enc = additive_encrypt(text, key)
+            req = {"cipher": "additive", "encrypted": enc, "key": key}
+        
+        elif choice == "2":
+            text = input("Enter text: ")
+            key = int(input("Enter key (coprime with 26): "))
+            enc = multiplicative_encrypt(text, key)
+            req = {"cipher": "multiplicative", "encrypted": enc, "key": key}
+        
+        elif choice == "3":
+            text = input("Enter text: ")
+            a = int(input("Enter multiplicative key a (coprime with 26): "))
+            b = int(input("Enter additive key b: "))
+            enc = affine_encrypt(text, a, b)
+            req = {"cipher": "affine", "encrypted": enc, "a": a, "b": b}
+        
+        elif choice == "4":
+            print("Exiting.")
+            break
+        else:
+            print("Invalid choice.")
+            continue
+
+        response = send_request(req)
+
+        if response["status"] == "success":
+            print("\n--- Result ---")
+            print(f"Original : {text}")
+            print(f"Encrypted: {enc}")
+            print(f"Decrypted: {response['decrypted']}")
+            print(f"Verified : {'✅ Correct' if response['decrypted'] == text else '❌ Wrong'}")
+        else:
+            print("Error:", response["message"])
+
+if __name__ == "__main__":
+    main()
